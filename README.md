@@ -47,18 +47,93 @@ All responses are JSON.
 - `GET /docs`
 - `GET /openapi.json`
 
+## Authentication (JWT)
+
+JWT authentication is enabled by default. Set `MUDIS_JWT_ENABLED=false` to opt out.
+
+Requests must include a bearer token:
+
+```bash
+curl -H "Authorization: Bearer <token>" "http://localhost:3000/cache/user:42?namespace=users"
+```
+
+Admin endpoints require an admin token (separate from read/write tokens). Admin endpoints:
+
+- `POST /reset`
+- `POST /metrics/reset`
+- `DELETE /namespace/:namespace`
+
+The default admin check looks for a `role` claim set to `admin`. You can change the claim name/value with env vars.
+
+Example admin claim payload:
+
+```json
+{"sub":"service","role":"admin"}
+```
+
+### Token Minting
+
+This service does not issue tokens. Callers must mint their own JWTs (signed with `MUDIS_JWT_SECRET` and using `MUDIS_JWT_ALGORITHM`) and include them as a bearer token on each request.
+
+### Default Secret Generation
+
+If you are not using Docker, you still need to set `MUDIS_JWT_SECRET` before starting the server. For local development and testing, prefer a deterministic secret so your tokens stay valid across restarts:
+
+```bash
+# Bash
+export MUDIS_JWT_SECRET="dev-secret"
+```
+
+```powershell
+# PowerShell
+$env:MUDIS_JWT_SECRET = "dev-secret"
+```
+
+```bash
+# Ruby
+ruby -e "puts 'dev-secret'"
+```
+
+### Local Opt-out
+
+You can disable JWT locally by setting `MUDIS_JWT_ENABLED=false` before starting the server.
+
+```bash
+# Bash
+export MUDIS_JWT_ENABLED="false"
+bundle exec puma -C config/puma.rb
+```
+
+```powershell
+# PowerShell
+$env:MUDIS_JWT_ENABLED = "false"
+bundle exec puma -C config/puma.rb
+```
+
+```bash
+# Ruby
+ruby -e "ENV['MUDIS_JWT_ENABLED']='false'; exec('bundle exec puma -C config/puma.rb')"
+```
+
+### Caller Binding (Opt-in)
+
+You can opt in to per-caller isolation by binding a namespace to a JWT claim. When enabled, the service derives the namespace from the claim and ignores client-supplied namespaces (rejecting mismatches).
+
+Example: with `MUDIS_BIND_NAMESPACE_CLAIM=sub` and `MUDIS_BIND_PREFIX=caller:`, a token with `{"sub":"acme"}` is bound to namespace `caller:acme`.
+
 ### Write Example
 
 ```bash
 curl -X POST "http://localhost:3000/cache/user:42?namespace=users" \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <token>" \
   -d '{"value": {"name": "Ada", "age": 38}, "expires_in": 60}'
 ```
 
 ### Read Example
 
 ```bash
-curl "http://localhost:3000/cache/user:42?namespace=users"
+curl -H "Authorization: Bearer <token>" "http://localhost:3000/cache/user:42?namespace=users"
 ```
 
 ### Mudis-QL Example
@@ -66,6 +141,7 @@ curl "http://localhost:3000/cache/user:42?namespace=users"
 ```bash
 curl -X POST "http://localhost:3000/ql" \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <token>" \
   -d '{
     "namespace": "users",
     "where": {"age": {"range": [30, 50]}},
@@ -112,6 +188,16 @@ docker exec -it <container> ./bin/mudis keys --namespace users
 - `WEB_CONCURRENCY` (default `2`)
 - `PUMA_THREADS` (default `5`)
 - `MUDIS_SERIALIZER` (`json`, `marshal`, `oj`)
+- `MUDIS_JWT_ENABLED` (`true`/`false`, default `true`)
+- `MUDIS_JWT_SECRET` (required when JWT is enabled)
+- `MUDIS_JWT_ALGORITHM` (default `HS256`)
+- `MUDIS_JWT_ISSUER` (optional)
+- `MUDIS_JWT_AUDIENCE` (optional)
+- `MUDIS_JWT_ADMIN_CLAIM` (default `role`)
+- `MUDIS_JWT_ADMIN_VALUE` (default `admin`)
+- `MUDIS_BIND_ENABLED` (`true`/`false`, default `false`)
+- `MUDIS_BIND_NAMESPACE_CLAIM` (default `sub`)
+- `MUDIS_BIND_PREFIX` (default empty)
 - `MUDIS_COMPRESS` (`true`/`false`)
 - `MUDIS_MAX_VALUE_BYTES`
 - `MUDIS_HARD_MEMORY_LIMIT` (`true`/`false`)

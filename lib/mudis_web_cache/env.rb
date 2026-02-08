@@ -20,6 +20,13 @@ module MudisWebCache
       end
     end
 
+    def string(name, default: nil)
+      val = ENV[name]
+      return default if val.nil? || val.strip.empty?
+
+      val
+    end
+
     def int(name, default: nil)
       val = ENV[name]
       return default if val.nil? || val.strip.empty?
@@ -59,6 +66,46 @@ module MudisWebCache
 
     def expiry_interval
       int("MUDIS_EXPIRY_INTERVAL", default: 60)
+    end
+
+    def jwt_enabled?
+      bool("MUDIS_JWT_ENABLED", default: true)
+    end
+
+    def jwt_secret
+      string("MUDIS_JWT_SECRET")
+    end
+
+    def jwt_algorithm
+      string("MUDIS_JWT_ALGORITHM", default: "HS256")
+    end
+
+    def jwt_issuer
+      string("MUDIS_JWT_ISSUER")
+    end
+
+    def jwt_audience
+      string("MUDIS_JWT_AUDIENCE")
+    end
+
+    def jwt_admin_claim
+      string("MUDIS_JWT_ADMIN_CLAIM", default: "role")
+    end
+
+    def jwt_admin_value
+      string("MUDIS_JWT_ADMIN_VALUE", default: "admin")
+    end
+
+    def bind_enabled?
+      bool("MUDIS_BIND_ENABLED", default: false)
+    end
+
+    def bind_namespace_claim
+      string("MUDIS_BIND_NAMESPACE_CLAIM", default: "sub")
+    end
+
+    def bind_prefix
+      string("MUDIS_BIND_PREFIX", default: "")
     end
   end
 end

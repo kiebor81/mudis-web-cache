@@ -12,6 +12,9 @@ module MudisWebCache
       req = Rack::Request.new(env)
       segments = path_segments(req.path_info)
 
+      auth_error = Auth.authenticate(req, segments)
+      return auth_error if auth_error
+
       case segments
       when []
         return json(200, name: "mudis-web-cache", status: "ok") if req.get?
@@ -90,12 +93,17 @@ module MudisWebCache
     end
 
     def handle_cache(req, segments)
+      cache, bound_ns, error = cache_scope(req)
+      return error if error
+
       key = segments[1]
       return json(400, error: "key is required") unless key
 
       if req.get? && segments.length == 2
-        namespace = req.params["namespace"]
-        value = Mudis.read(key, namespace: namespace)
+        namespace, error = namespace_for_value(req.params["namespace"], bound_ns)
+        return error if error
+
+        value = cache_call(cache, :read, key, namespace: namespace, bound_ns: bound_ns)
         return json(404, error: "not found") if value.nil?
 
         return json(200, value: value)
@@ -103,25 +111,31 @@ module MudisWebCache
 
       if (req.post? || req.put?) && segments.length == 2
         params = merged_params(req)
-        namespace = params["namespace"]
+        namespace, error = namespace_for_value(params["namespace"], bound_ns)
+        return error if error
+
         expires_in = to_int(params["expires_in"])
         value = params.key?("value") ? params["value"] : nil
 
         return json(400, error: "value is required") if value.nil?
 
-        Mudis.write(key, value, expires_in: expires_in, namespace: namespace)
+        cache_call(cache, :write, key, value, expires_in: expires_in, namespace: namespace, bound_ns: bound_ns)
         return json(200, status: "written", key: key)
       end
 
       if req.delete? && segments.length == 2
-        namespace = req.params["namespace"]
-        Mudis.delete(key, namespace: namespace)
+        namespace, error = namespace_for_value(req.params["namespace"], bound_ns)
+        return error if error
+
+        cache_call(cache, :delete, key, namespace: namespace, bound_ns: bound_ns)
         return json(200, status: "deleted", key: key)
       end
 
       if req.get? && segments[2] == "inspect"
-        namespace = req.params["namespace"]
-        data = Mudis.inspect(key, namespace: namespace)
+        namespace, error = namespace_for_value(req.params["namespace"], bound_ns)
+        return error if error
+
+        data = cache_call(cache, :inspect, key, namespace: namespace, bound_ns: bound_ns)
         return json(404, error: "not found") if data.nil?
 
         return json(200, data)
@@ -131,51 +145,82 @@ module MudisWebCache
     end
 
     def handle_exists(req, segments)
+      cache, bound_ns, error = cache_scope(req)
+      return error if error
+
       key = segments[1]
       return json(400, error: "key is required") unless key
 
-      namespace = req.params["namespace"]
-      json(200, exists: Mudis.exists?(key, namespace: namespace))
+      namespace, error = namespace_for_value(req.params["namespace"], bound_ns)
+      return error if error
+
+      exists = cache_call(cache, :exists?, key, namespace: namespace, bound_ns: bound_ns)
+      json(200, exists: exists)
     end
 
     def handle_inspect(req, segments)
+      cache, bound_ns, error = cache_scope(req)
+      return error if error
+
       key = segments[1]
       return json(400, error: "key is required") unless key
 
-      namespace = req.params["namespace"]
-      data = Mudis.inspect(key, namespace: namespace)
+      namespace, error = namespace_for_value(req.params["namespace"], bound_ns)
+      return error if error
+
+      data = cache_call(cache, :inspect, key, namespace: namespace, bound_ns: bound_ns)
       return json(404, error: "not found") if data.nil?
 
       json(200, data)
     end
 
     def handle_keys(req)
-      namespace = req.params["namespace"]
-      return json(400, error: "namespace is required") if namespace.nil? || namespace.empty?
+      cache, bound_ns, error = cache_scope(req)
+      return error if error
 
-      json(200, keys: Mudis.keys(namespace: namespace))
+      namespace, error = namespace_for_value(req.params["namespace"], bound_ns, required: !bound_ns)
+      return error if error
+
+      keys = cache_call(cache, :keys, namespace: namespace, bound_ns: bound_ns)
+      json(200, keys: keys)
     end
 
     def handle_namespace(req, segments)
+      _cache, bound_ns, error = cache_scope(req)
+      return error if error
+
       namespace = segments[1]
       return json(400, error: "namespace is required") unless namespace
 
       if req.delete?
-        Mudis.clear_namespace(namespace: namespace)
-        return json(200, status: "cleared", namespace: namespace)
+        if bound_ns && namespace != bound_ns
+          return json(403, error: "namespace locked")
+        end
+
+        Mudis.clear_namespace(namespace: bound_ns || namespace)
+        return json(200, status: "cleared", namespace: bound_ns || namespace)
       end
 
       json(404, error: "not found")
     end
 
     def handle_least_touched(req)
+      cache, _bound_ns, error = cache_scope(req)
+      return error if error
+
       count = to_int(req.params["count"]) || 10
-      json(200, keys: Mudis.least_touched(count))
+      keys = cache_call(cache, :least_touched, count, bound_ns: bound_ns)
+      json(200, keys: keys)
     end
 
     def handle_ql(req)
+      _cache, bound_ns, error = cache_scope(req)
+      return error if error
+
       params = merged_params(req)
-      namespace = params["namespace"]
+      namespace, error = namespace_for_value(params["namespace"], bound_ns, required: false)
+      return error if error
+
       action = (params["action"] || "all").to_s
 
       scope = MudisQL.from(namespace)
@@ -343,6 +388,52 @@ module MudisWebCache
       Integer(value)
     rescue ArgumentError, TypeError
       nil
+    end
+
+    def cache_scope(req)
+      return [Mudis, nil, nil] unless Env.bind_enabled?
+
+      namespace, error = bound_namespace(req)
+      return [nil, nil, error] if error
+
+      [Mudis.bind(namespace: namespace), namespace, nil]
+    end
+
+    def bound_namespace(req)
+      claims = req.env["mudis.jwt.claims"] || {}
+      claim_name = Env.bind_namespace_claim
+      value = claims[claim_name] || claims[claim_name.to_sym]
+      value = value.to_s.strip
+
+      return [nil, json(403, error: "missing bind claim: #{claim_name}")] if value.empty?
+
+      ["#{Env.bind_prefix}#{value}", nil]
+    end
+
+    def namespace_for_value(value, bound_ns, required: false)
+      if bound_ns
+        if value && !value.to_s.empty? && value.to_s != bound_ns
+          return [nil, json(403, error: "namespace locked")]
+        end
+
+        return [bound_ns, nil]
+      end
+
+      if required && (value.nil? || value.to_s.empty?)
+        return [nil, json(400, error: "namespace is required")]
+      end
+
+      [value, nil]
+    end
+
+    def cache_call(cache, method, *args, namespace: nil, bound_ns: nil, **kwargs)
+      return cache.public_send(method, *args, **kwargs) if bound_ns
+
+      if namespace.nil?
+        cache.public_send(method, *args, **kwargs)
+      else
+        cache.public_send(method, *args, **kwargs, namespace: namespace)
+      end
     end
   end
 end

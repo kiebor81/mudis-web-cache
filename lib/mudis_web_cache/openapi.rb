@@ -12,6 +12,8 @@ module MudisWebCache
           version: "1.0.0"
         },
         servers: servers(base_url),
+        components: components,
+        security: [{ bearerAuth: [] }],
         paths: paths
       }
     end
@@ -27,6 +29,7 @@ module MudisWebCache
         "/health" => {
           get: {
             summary: "Health check",
+            security: [],
             responses: json_response(200)
           }
         },
@@ -39,12 +42,14 @@ module MudisWebCache
         "/metrics/reset" => {
           post: {
             summary: "Reset cache metrics",
+            description: "Admin token required.",
             responses: json_response(200)
           }
         },
         "/reset" => {
           post: {
             summary: "Reset cache data",
+            description: "Admin token required.",
             responses: json_response(200)
           }
         },
@@ -96,6 +101,7 @@ module MudisWebCache
         "/namespace/{namespace}" => {
           delete: {
             summary: "Clear a namespace",
+            description: "Admin token required.",
             parameters: [path_namespace_param],
             responses: json_response(200)
           }
@@ -112,6 +118,18 @@ module MudisWebCache
             summary: "Run a Mudis-QL query",
             requestBody: json_body_schema(ql_body_schema),
             responses: json_response(200)
+          }
+        }
+      }
+    end
+
+    def components
+      {
+        securitySchemes: {
+          bearerAuth: {
+            type: "http",
+            scheme: "bearer",
+            bearerFormat: "JWT"
           }
         }
       }
