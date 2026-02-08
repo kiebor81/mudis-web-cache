@@ -175,11 +175,13 @@ Open `http://localhost:3000/docs` for interactive API docs. The OpenAPI spec is 
 
 ## CLI Inside Container
 
-The image includes `mudis-cli`. Use the wrapper for runtime interaction:
+The image includes `mudis-cli`. This wrapper is intended for IPC usage only and connects to the running cache via IPC. Use it for runtime interaction:
 
 ```bash
 docker exec -it <container> ./bin/mudis keys --namespace users
 ```
+
+The CLI process is a separate client that connects to the cache over IPC. If IPC mode is disabled, the CLI will exit with an error.
 
 ## Configuration (Docker Args / ENV)
 
