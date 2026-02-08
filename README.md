@@ -17,6 +17,9 @@ docker compose -f docker-compose.yml up --build
 
 App will listen on `http://localhost:3000`.
 
+By default, the compose file enables Mudis soft persistence and writes snapshots to `./data/mudis_snapshot.dump`
+(mounted into the container at `/data`).
+
 ## Local Start (No Docker)
 
 ```bash
@@ -226,6 +229,8 @@ The CLI process is a separate client that connects to the cache over IPC. If IPC
 Notes:
 
 - IPC mode is enabled via Puma preload + IPC server in `config/puma.rb` when `MUDIS_IPC_MODE=true` and workers > 0.
+- When `MUDIS_PERSISTENCE_ENABLED=true`, the server loads the snapshot on startup and saves it on exit (via the Mudis persistence hook).
+- `MUDIS_PERSISTENCE_PATH` controls where the snapshot is written (only when persistence is enabled). In containers, set this to a mounted path or shared volume.
 - On Windows, Puma workers are disabled automatically (worker mode not supported).
 - For `MUDIS_SERIALIZER=oj`, you must add the `oj` gem (not included by default).
 - SSL is optional. When enabled, you must supply `MUDIS_SSL_CERT` and `MUDIS_SSL_KEY`.

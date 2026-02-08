@@ -50,6 +50,7 @@ module MudisWebCache
 
     def start_ipc_server!
       configure_mudis!
+      Mudis.load_snapshot! if Env.bool("MUDIS_PERSISTENCE_ENABLED", default: false)
       Mudis.start_expiry_thread(interval: Env.expiry_interval)
       MudisWebCache::IPCExtensions.install!
       MudisServer.start!

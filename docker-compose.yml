@@ -5,6 +5,8 @@ services:
       dockerfile: mudis-web-cache/Dockerfile
     ports:
       - "3000:3000"
+    volumes:
+      - ./data:/data
     environment:
       PORT: "3000"
       RACK_ENV: "production"
@@ -21,7 +23,10 @@ services:
       MUDIS_HARD_MEMORY_LIMIT: "false"
       MUDIS_BUCKETS: "32"
       MUDIS_EXPIRY_INTERVAL: "60"
-      MUDIS_PERSISTENCE_ENABLED: "false"
+      MUDIS_PERSISTENCE_ENABLED: "true"
+      MUDIS_PERSISTENCE_PATH: "/data/mudis_snapshot.dump"
+      MUDIS_PERSISTENCE_FORMAT: "json"
+      MUDIS_PERSISTENCE_SAFE_WRITE: "true"
       MUDIS_FORCE_TCP: "false"
       MUDIS_IPC_MODE: "true"
       MUDIS_SSL_ENABLED: "false"
