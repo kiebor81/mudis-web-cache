@@ -1,0 +1,22 @@
+services:
+  mudis-web-cache:
+    build:
+      context: .
+      dockerfile: mudis-web-cache/Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      PORT: "3000"
+      RACK_ENV: "production"
+      WEB_CONCURRENCY: "2"
+      PUMA_THREADS: "5"
+      MUDIS_SERIALIZER: "json"
+      MUDIS_COMPRESS: "false"
+      MUDIS_MAX_BYTES: "1073741824"
+      MUDIS_HARD_MEMORY_LIMIT: "false"
+      MUDIS_BUCKETS: "32"
+      MUDIS_EXPIRY_INTERVAL: "60"
+      MUDIS_PERSISTENCE_ENABLED: "false"
+      MUDIS_FORCE_TCP: "false"
+      MUDIS_IPC_MODE: "true"
+      MUDIS_SSL_ENABLED: "false"
