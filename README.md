@@ -1,3 +1,7 @@
+[![RubyMine](https://www.elegantobjects.org/rubymine.svg)](https://www.jetbrains.com/ruby/)
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+
 # Mudis Web Cache
 
 Rack + Puma web cache server for [Mudis](https://github.com/kiebor81/mudis). This app runs Mudis in IPC mode inside the Puma master process and exposes HTTP endpoints for cache interaction. It bundles `mudis-cli` and `mudis-ql` by default.
