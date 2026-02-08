@@ -1,6 +1,6 @@
 # Mudis Web Cache
 
-Rack + Puma web cache server for Mudis. This app runs Mudis in IPC mode inside the Puma master process and exposes HTTP endpoints for cache interaction. It bundles `mudis-cli` and `mudis-ql` by default.
+Rack + Puma web cache server for [Mudis](https://github.com/kiebor81/mudis). This app runs Mudis in IPC mode inside the Puma master process and exposes HTTP endpoints for cache interaction. It bundles `mudis-cli` and `mudis-ql` by default.
 
 ## Requirements
 
